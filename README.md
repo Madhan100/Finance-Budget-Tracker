@@ -1,136 +1,140 @@
-# FinTrack Pro – Finance Budget Tracker Mobile App
-### MCA Semester III – Core Elective-II: Mobile App Development using React Native
-**Autonomous End of Semester Examinations – Major Hackathon (75 Marks)**
+# FinTrack Pro – Finance & Budget Tracker Mobile App
+
+A clean, modern, and intuitive personal finance and budget tracking mobile application built with **React Native** and **Expo**. Designed with a sleek mobile-first UI, featuring role-based demo access, responsive analytics, dynamic monthly ledgers, and comprehensive expense categorization.
 
 ---
 
-## 📱 Project Overview
-**FinTrack Pro** is a comprehensive, modern, and production-ready mobile budget management application built with **React Native** and **Expo**. It follows the **Figma design specifications** and satisfies all functional and architectural criteria outlined in the RVS SCS MCA examination question paper.
+## ✨ Features
 
-No external backend or database is needed. All transactions, categories, user profiles, monthly ledgers, and financial reports are driven by localized reactive state management with dynamic real-time recalculations.
+- **🔐 Role-Based Access Control:**
+  - Dedicated access modes for **Customer** and **Admin**.
+  - 1-Tap quick demo credential autofill for easy preview and testing.
+  - Role validation preventing unauthorized portal access.
 
----
+- **📊 Comprehensive Financial Analytics:**
+  - Real-time balance, total income, and total expense metrics.
+  - Interactive income vs. expense visual ratio bar.
+  - Ranked expense category breakdown with progress indicators.
+  - Monthly spending trends across recorded months.
 
-## 🎯 Exam Requirements & Marks Distribution (75 Marks)
+- **📅 Month-Wise Ledger:**
+  - Browse past and present months with interactive previous/next selectors.
+  - Itemized transaction history with type tags (Income / Expense).
+  - Monthly net-flow subtotal calculations.
+  - Filter transactions by `All`, `Expenses`, or `Income`.
 
-### Part I – Required Screens (30 Marks)
-| Screen | Requirement & Features | Marks | Status |
-| :--- | :--- | :---: | :---: |
-| **Screen 1: Home Screen** | App branding, welcome banner, role badges, hero balance gradient card, daily/weekly/monthly report summaries, quick actions grid, and recent transactions. | **5** | ✅ Completed |
-| **Screen 2: Analysis Screen** | Total Income, Total Expenses, Current Net Balance, visual ratio progress bars, ranked category expense breakdown, and monthly trends. Accessible to both Admin & Customer. | **5** | ✅ Completed |
-| **Screen 3: Profile & Edit Profile** | Customer-only profile with correct Name, Email, and Role tag. Edit profile form with validations (name, email format, phone, currency, budget) that update globally. | **5** | ✅ Completed |
-| **Screen 4: Month-wise Transactions** | Customer-only monthly ledger. Previous/Next month selectors (`2026-10`, `2026-09`, `2026-08`), subtotal breakdown bar, type filters (All/Expense/Income), and empty state. | **5** | ✅ Completed |
-| **Screen 5: Overall Categories Screen** | Expense categories (Food, Travel, Shopping, Bills, Entertainment, Health, Education) with total spent, budget progress bars, and navigation to details. | **5** | ✅ Completed |
-| **Screen 6: Category Details Screen** | Selected category name, icon, total spent, remaining allowance, and itemized list of transactions with dates and amounts. Real-time updates. | **5** | ✅ Completed |
+- **📁 Category Management & Details:**
+  - Organized expense classification: Food, Travel, Shopping, Bills, Entertainment, Health, and Education.
+  - Category-level budgets with remaining allowances and over-budget warnings.
+  - Deep-dive into category details with itemized expense lists.
 
-### Part II – React Navigation (30 Marks)
-| Navigation Type | Implementation | Marks | Status |
-| :--- | :--- | :---: | :---: |
-| **Stack Navigation** | Native Stack for Auth (`SignIn`, `SignUp`) and App (`DrawerRoot`, `CategoryDetails`, `AddEditTransaction`, `EditProfile`) with smooth modals and back navigation. | **10** | ✅ Completed |
-| **Bottom Tab Navigation** | Professional tab bar with icons and badges (Home, Analysis, Transactions/Records, Categories, Profile) respecting the user's role. | **10** | ✅ Completed |
-| **Drawer Navigation** | Custom side drawer with user profile banner (Avatar, Name, Email, Role badge), role-filtered navigation items, and session-clearing Logout. | **10** | ✅ Completed |
+- **🔔 Interactive Transaction Alerts:**
+  - Real-time in-app floating banner notifications.
+  - Contextual updates when adding, editing, or removing transactions.
 
-### Part III – Functional Requirements (15 Marks)
-| Requirement | Implementation | Marks | Status |
-| :--- | :--- | :---: | :---: |
-| **Screen Navigation** | All buttons, drawer triggers, tabs, and back navigations work smoothly without broken routes or blank screens. | **5** | ✅ Completed |
-| **Personalized Alerts** | Interactive in-app notification banner and native dialogs with user greeting: *"Hi Gokul, your expense for 'Grocery Basket' has been added successfully."*, *"Your transaction has been updated."*, *"Your transaction has been deleted."* | **5** | ✅ Completed |
-| **Daily, Weekly, Monthly Reports** | Real-time calculation on the Home screen based on local transaction dates. Toggle between Daily, Weekly, and Monthly with Income, Expense, and Net Balance. | **5** | ✅ Completed |
+- **👤 Profile Management:**
+  - Customer profile overview with role indicators.
+  - Edit personal details including Name, Email, Phone, Currency symbol, and Monthly Budget targets.
+  - Live state persistence across Home, Drawer, and Profile.
 
----
-
-## 🔐 Role-Based Demo Credentials
-
-| Role | Name | Email | Password | Access Privileges |
-| :--- | :--- | :--- | :--- | :--- |
-| **Admin** | **Madhan** | `madhan.admin@example.com` | `Admin@123` | Supervisory access to all system records, global financial analytics, admin control console, and system audit stats. |
-| **Customer** | **Gokul** | `gokul.customer@example.com` | `Customer@123` | Full personal ledger access, month-by-month filters, category analysis, personalized alerts, and editable profile. |
-
-> **Examiner Tip:** The Sign In screen features **1-Tap Demo Auto Fill** buttons (`⚡ Gokul (Customer)` and `⚡ Madhan (Admin)`) for rapid instant testing.
->
-> **Strict Role Security:** If a user attempts to log in with Admin credentials while the Customer role tab is selected (or vice versa), the app prevents access and displays: *"Access Denied: This account is registered as 'Admin'. You cannot sign in under 'Customer' role."*
+- **🧭 Multi-Navigation Architecture:**
+  - **Stack Navigation:** Smooth modal transitions and child screen flows.
+  - **Bottom Tab Navigation:** Fast access to core views (Home, Analysis, Months, Categories, Profile).
+  - **Drawer Navigation:** Side menu with personalized profile header and role-based links.
 
 ---
 
-## 🚀 How to Run the Application
+## 🛠️ Tech Stack
 
-### 1. Start the Dev Server
-In the project root directory, run:
-```bash
-npx expo start
-```
-or
-```bash
-npm start
-```
-
-### 2. View on Device or Simulator
-- **Android Device / Expo Go:** Scan the displayed QR code with the **Expo Go** app.
-- **Web Browser:** Press `w` in the terminal or run:
-  ```bash
-  npm run web
-  ```
-- **Android Emulator:** Press `a` in the terminal or run:
-  ```bash
-  npm run android
-  ```
-- **iOS Simulator:** Press `i` in the terminal (macOS).
+- **Framework:** React Native, Expo (SDK 58)
+- **Navigation:** React Navigation (Native Stack, Bottom Tabs, Drawer)
+- **State Management:** React Context API (AuthContext, BudgetContext)
+- **UI & Icons:** Expo Vector Icons (Ionicons), Expo Linear Gradient
+- **Styling:** Custom design tokens (Figma-inspired palette, responsive typography, soft elevation shadows)
 
 ---
 
-## 📂 Project Architecture
+## 🚀 Getting Started
+
+### Prerequisites
+Make sure you have **Node.js** (v18+) and **npm** installed on your machine.
+
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Madhan100/Finance-Budget-Tracker.git
+   cd Finance-Budget-Tracker
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Start the Expo development server:**
+   ```bash
+   npx expo start
+   ```
+
+### Running on Devices
+- **Mobile Device (Android / iOS):** Scan the terminal QR code using the **Expo Go** app.
+- **Web Browser:** Press `w` in the terminal or run `npm run web`.
+- **Android Emulator:** Press `a` in the terminal or run `npm run android`.
+- **iOS Simulator:** Press `i` in the terminal.
+
+---
+
+## 📂 Project Structure
 
 ```
 Finance-Budget-Tracker/
-├── App.js                         # Root entry wrapping SafeArea, AuthProvider, BudgetProvider
-├── index.js                       # Root registration with react-native-gesture-handler
-├── app.json                       # Expo configuration
-├── package.json                   # Verified Expo SDK 58 compatible dependencies
+├── App.js                     # Root entry with Context & SafeArea providers
+├── index.js                   # App registry and gesture handler setup
+├── app.json                   # Expo configuration
+├── package.json               # Dependencies and scripts
 │
 └── src/
     ├── constants/
-    │   ├── theme.js               # Figma color palette, spacing, radius, and shadows
-    │   ├── categories.js          # Expense & Income categories with icons, colors, and budgets
-    │   └── initialData.js         # Realistic seed transactions (daily, weekly, monthly)
+    │   ├── theme.js           # Design tokens, color palette, spacing & shadows
+    │   ├── categories.js      # Expense & income category definitions
+    │   └── initialData.js     # Default transaction dataset
     │
     ├── context/
-    │   ├── AuthContext.js         # Role-based demo auth, profile updates, and session clearing
-    │   └── BudgetContext.js       # Transaction CRUD, month aggregations, reports, and alerts
+    │   ├── AuthContext.js     # Authentication, roles, and profile state
+    │   └── BudgetContext.js   # Transaction CRUD, monthly calculations & alerts
     │
     ├── components/
-    │   ├── CustomHeader.js        # Header with drawer hamburger, role badge, and back button
-    │   ├── CustomDrawerContent.js # Side drawer with user profile banner and role-based links
-    │   ├── PersonalizedAlert.js   # Floating in-app notification banner
-    │   ├── TransactionCard.js     # Reusable transaction card with category badge and amount
-    │   ├── CategoryCard.js        # Category spending vs budget card with progress bar
-    │   └── ReportSummaryCard.js   # Daily, Weekly, Monthly segmented financial reports
+    │   ├── CustomHeader.js        # Reusable screen header with drawer/back controls
+    │   ├── CustomDrawerContent.js # Side drawer with user profile banner
+    │   ├── PersonalizedAlert.js   # In-app notification toast banner
+    │   ├── TransactionCard.js     # Transaction item card with category styling
+    │   ├── CategoryCard.js        # Category spending & budget progress card
+    │   └── ReportSummaryCard.js   # Daily, Weekly, Monthly financial report cards
     │
     ├── navigation/
-    │   ├── RootNavigator.js       # Switches between AuthNavigator and AppNavigator
-    │   ├── AuthNavigator.js       # Stack: SignIn and SignUp screens
-    │   ├── AppNavigator.js        # Stack: DrawerRoot, CategoryDetails, AddEditTransaction, EditProfile
-    │   ├── DrawerNavigator.js     # Drawer: Home, Analysis, Transactions, Categories, Profile, Logout
-    │   └── TabNavigator.js        # Bottom Tabs: Home, Analysis, Transactions/Records, Categories, Profile
+    │   ├── RootNavigator.js   # Auth conditional router
+    │   ├── AuthNavigator.js   # Sign In & Sign Up stack
+    │   ├── AppNavigator.js    # Main application stack
+    │   ├── DrawerNavigator.js # Side navigation drawer
+    │   └── TabNavigator.js    # Bottom tab bar
     │
     └── screens/
         ├── auth/
-        │   ├── SignInScreen.js    # Role selector, demo fillers, validation, and error messages
-        │   └── SignUpScreen.js    # Registration form with input validations
+        │   ├── SignInScreen.js    # Role-based login with demo quick-fill
+        │   └── SignUpScreen.js    # User registration with validations
         └── app/
-            ├── HomeScreen.js            # [Screen 1] Balance gradient card, reports, quick actions
-            ├── AnalysisScreen.js        # [Screen 2] Income, expenses, balance, ratio bars, trends
-            ├── ProfileScreen.js         # [Screen 3] Customer profile details, role badge, highlights
-            ├── EditProfileScreen.js     # [Screen 3] Profile editing with validation and live updates
-            ├── TransactionScreen.js     # [Screen 4] Month-by-month ledger with previous/next navigation
-            ├── AddEditTransactionScreen.js # Transaction form with category picker & personalized alerts
-            ├── CategoriesScreen.js      # [Screen 5] Overall expense categories & budget progress
-            └── CategoryDetailsScreen.js # [Screen 6] Selected category details & itemized records
+            ├── HomeScreen.js            # Balance overview, reports, recent activity
+            ├── AnalysisScreen.js        # Detailed analytics, ratio bars & trends
+            ├── ProfileScreen.js         # User profile and account details
+            ├── EditProfileScreen.js     # Profile editing form
+            ├── TransactionScreen.js     # Month-by-month transaction ledger
+            ├── AddEditTransactionScreen.js # Add/edit transaction form
+            ├── CategoriesScreen.js      # Overall category overview
+            └── CategoryDetailsScreen.js # Itemized category history
 ```
 
 ---
 
-## 🧪 Verification & Test Results
-- **Expo Doctor Check:** 20/20 checks passed without errors.
-- **Bundler Compilation:** Verified with `npx expo export --platform web` (1,164 modules bundled cleanly).
-- **Navigation Verification:** Stack, Bottom Tabs, and Drawer all configured and functional.
-- **Form Validations:** Verified on SignIn, SignUp, Edit Profile, and Transaction forms.
+## 📄 License
+This project is open source and available under the [MIT License](LICENSE).
