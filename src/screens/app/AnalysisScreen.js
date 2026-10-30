@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,62 +6,165 @@ import {
   ScrollView,
   SafeAreaView,
   TouchableOpacity,
+  Modal,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, RADIUS, SPACING, SHADOWS } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { useBudget } from '../../context/BudgetContext';
+import { DEFAULT_CATEGORIES } from '../../constants/categories';
 import { CustomHeader } from '../../components/CustomHeader';
 import { PersonalizedAlert } from '../../components/PersonalizedAlert';
 
 export const AnalysisScreen = ({ navigation }) => {
   const { currentUser } = useAuth();
-  const { totals, categoryStats, availableMonths, getTransactionsForMonth } = useBudget();
+  const { transactions, availableMonths } = useBudget();
   const currency = currentUser?.currencySymbol || '₹';
 
-  // Filter mode: 'all' or specific month key (e.g. '2026-10')
-  const [filterMode, setFilterMode] = useState('all');
+  // Filter States
+  const [periodFilter, setPeriodFilter] = useState('all'); // 'all', 'today', 'week', '2026-10', '2026-09', '2026-08'
+  const [typeFilter, setTypeFilter] = useState('all'); // 'all', 'expense', 'income'
+  const [selectedCategory, setSelectedCategory] = useState('all'); // 'all' or category id ('food', 'travel', etc.)
+  const [sortBy, setSortBy] = useState('amount_desc'); // 'amount_desc', 'date_desc', 'amount_asc'
+  const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
 
-  // Compute filtered stats if a specific month is selected
-  const activeStats = React.useMemo(() => {
-    if (filterMode === 'all') {
-      return totals;
-    }
-    const monthTx = getTransactionsForMonth(filterMode);
+  // Reference today date in sample data: 2026-10-28
+  const todayStr = '2026-10-28';
+
+  // Filter transactions based on active filters
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(t => {
+      // 1. Period Filter
+      if (periodFilter === 'today') {
+        if (t.date !== todayStr) return false;
+      } else if (periodFilter === 'week') {
+        // 7-day window: 2026-10-22 to 2026-10-28
+        if (t.date < '2026-10-22' || t.date > todayStr) return false;
+      } else if (periodFilter !== 'all') {
+        // Specific month key (e.g., '2026-10')
+        if (!t.date.startsWith(periodFilter)) return false;
+      }
+
+      // 2. Type Filter
+      if (typeFilter !== 'all' && t.type !== typeFilter) {
+        return false;
+      }
+
+      // 3. Category Filter
+      if (selectedCategory !== 'all' && t.category !== selectedCategory) {
+        return false;
+      }
+
+      return true;
+    }).sort((a, b) => {
+      if (sortBy === 'amount_desc') return Number(b.amount) - Number(a.amount);
+      if (sortBy === 'amount_asc') return Number(a.amount) - Number(b.amount);
+      return b.date.localeCompare(a.date);
+    });
+  }, [transactions, periodFilter, typeFilter, selectedCategory, sortBy]);
+
+  // Compute stats on the filtered transactions
+  const activeStats = useMemo(() => {
     let inc = 0;
     let exp = 0;
-    monthTx.forEach(t => {
-      if (t.type === 'income') inc += Number(t.amount);
-      else exp += Number(t.amount);
+
+    filteredTransactions.forEach(t => {
+      const amt = Number(t.amount) || 0;
+      if (t.type === 'income') inc += amt;
+      else exp += amt;
     });
+
+    const balance = inc - exp;
+    const savingsRate = inc > 0 ? Math.max(0, Math.round(((inc - exp) / inc) * 100)) : 0;
+
     return {
       income: inc,
       expense: exp,
-      balance: inc - exp,
-      savingsRate: inc > 0 ? Math.max(0, Math.round(((inc - exp) / inc) * 100)) : 0,
-      totalCount: monthTx.length,
+      balance,
+      savingsRate,
+      totalCount: filteredTransactions.length,
     };
-  }, [filterMode, totals, getTransactionsForMonth]);
+  }, [filteredTransactions]);
 
-  // Compute category breakdown for the selected scope
-  const activeCategoryBreakdown = React.useMemo(() => {
+  // Compute category breakdown accurately for filtered transactions
+  const activeCategoryBreakdown = useMemo(() => {
     const totalExp = activeStats.expense || 1;
-    return categoryStats
-      .filter(c => c.type === 'expense' && c.totalSpent > 0)
-      .sort((a, b) => b.totalSpent - a.totalSpent);
-  }, [categoryStats, activeStats.expense]);
+    const catMap = new Map();
+
+    filteredTransactions
+      .filter(t => t.type === 'expense')
+      .forEach(t => {
+        const prev = catMap.get(t.category) || 0;
+        catMap.set(t.category, prev + Number(t.amount));
+      });
+
+    const list = [];
+    catMap.forEach((spent, catId) => {
+      const catDef = DEFAULT_CATEGORIES.find(c => c.id === catId) || {
+        name: catId,
+        icon: 'card-outline',
+        color: COLORS.primary,
+        bgColor: '#F1F5F9',
+      };
+      const percentage = Math.round((spent / totalExp) * 100);
+      list.push({
+        id: catId,
+        name: catDef.name,
+        icon: catDef.icon,
+        color: catDef.color,
+        bgColor: catDef.bgColor,
+        totalSpent: spent,
+        percentage,
+      });
+    });
+
+    return list.sort((a, b) => b.totalSpent - a.totalSpent);
+  }, [filteredTransactions, activeStats.expense]);
 
   const totalIncomeExpense = (activeStats.income + activeStats.expense) || 1;
   const incomePercent = Math.round((activeStats.income / totalIncomeExpense) * 100);
   const expensePercent = Math.round((activeStats.expense / totalIncomeExpense) * 100);
 
+  // Count active non-default filters
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (periodFilter !== 'all') count++;
+    if (typeFilter !== 'all') count++;
+    if (selectedCategory !== 'all') count++;
+    if (sortBy !== 'amount_desc') count++;
+    return count;
+  }, [periodFilter, typeFilter, selectedCategory, sortBy]);
+
+  const resetFilters = () => {
+    setPeriodFilter('all');
+    setTypeFilter('all');
+    setSelectedCategory('all');
+    setSortBy('amount_desc');
+  };
+
+  const getPeriodLabel = (key) => {
+    if (key === 'all') return 'All Time';
+    if (key === 'today') return 'Today';
+    if (key === 'week') return 'This Week';
+    const found = availableMonths.find(m => m.key === key);
+    return found ? found.label : key;
+  };
+
+  const getSelectedCatName = () => {
+    if (selectedCategory === 'all') return 'All Categories';
+    const found = DEFAULT_CATEGORIES.find(c => c.id === selectedCategory);
+    return found ? found.name : selectedCategory;
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <CustomHeader
         title="Financial Analysis"
-        subtitle="Income, Expenses & Budget Insights"
+        subtitle="Income, Expenses & Filtered Insights"
         navigation={navigation}
+        rightIcon="options-outline"
+        onRightPress={() => setIsFilterModalVisible(true)}
       />
 
       <PersonalizedAlert />
@@ -71,50 +174,157 @@ export const AnalysisScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Scope Filter Pills: All Time vs Months */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.filterScroll}
-          contentContainerStyle={styles.filterContainer}
-        >
-          <TouchableOpacity
-            style={[
-              styles.filterPill,
-              filterMode === 'all' && styles.filterPillActive,
-            ]}
-            onPress={() => setFilterMode('all')}
-          >
-            <Text
-              style={[
-                styles.filterPillText,
-                filterMode === 'all' && styles.filterPillTextActive,
-              ]}
-            >
-              Overall All Time
-            </Text>
-          </TouchableOpacity>
+        {/* Filter Control Header & Active Filter Pills */}
+        <View style={[styles.filterBarCard, SHADOWS.sm]}>
+          <View style={styles.filterBarHeader}>
+            <View style={styles.filterTitleArea}>
+              <Ionicons name="filter" size={18} color={COLORS.primary} />
+              <Text style={styles.filterBarTitle}>Active Filter Options</Text>
+              {activeFilterCount > 0 && (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{activeFilterCount} active</Text>
+                </View>
+              )}
+            </View>
 
-          {availableMonths.map(m => (
+            <View style={styles.filterButtonsRow}>
+              {activeFilterCount > 0 && (
+                <TouchableOpacity style={styles.resetButton} onPress={resetFilters}>
+                  <Text style={styles.resetButtonText}>Reset</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                style={styles.filterTriggerButton}
+                onPress={() => setIsFilterModalVisible(true)}
+              >
+                <Ionicons name="funnel-outline" size={14} color={COLORS.white} />
+                <Text style={styles.filterTriggerText}>Filter</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Quick Flow Type Switcher: All, Expense, Income */}
+          <View style={styles.typeSwitcher}>
             <TouchableOpacity
-              key={m.key}
               style={[
-                styles.filterPill,
-                filterMode === m.key && styles.filterPillActive,
+                styles.typeOption,
+                typeFilter === 'all' && styles.typeOptionActive,
               ]}
-              onPress={() => setFilterMode(m.key)}
+              onPress={() => setTypeFilter('all')}
             >
               <Text
                 style={[
-                  styles.filterPillText,
-                  filterMode === m.key && styles.filterPillTextActive,
+                  styles.typeOptionText,
+                  typeFilter === 'all' && styles.typeOptionTextActive,
                 ]}
               >
-                {m.label}
+                All Flow
               </Text>
             </TouchableOpacity>
-          ))}
-        </ScrollView>
+
+            <TouchableOpacity
+              style={[
+                styles.typeOption,
+                typeFilter === 'expense' && styles.typeOptionActiveExpense,
+              ]}
+              onPress={() => setTypeFilter('expense')}
+            >
+              <Ionicons
+                name="arrow-down-circle"
+                size={13}
+                color={typeFilter === 'expense' ? COLORS.white : COLORS.danger}
+              />
+              <Text
+                style={[
+                  styles.typeOptionText,
+                  typeFilter === 'expense' && styles.typeOptionTextActive,
+                ]}
+              >
+                Expenses
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.typeOption,
+                typeFilter === 'income' && styles.typeOptionActiveIncome,
+              ]}
+              onPress={() => setTypeFilter('income')}
+            >
+              <Ionicons
+                name="arrow-up-circle"
+                size={13}
+                color={typeFilter === 'income' ? COLORS.white : COLORS.success}
+              />
+              <Text
+                style={[
+                  styles.typeOptionText,
+                  typeFilter === 'income' && styles.typeOptionTextActive,
+                ]}
+              >
+                Income
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Horizontal Time Period Quick Pills */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.periodScroll}
+            contentContainerStyle={styles.periodContainer}
+          >
+            {[
+              { id: 'all', label: 'All Time' },
+              { id: 'today', label: 'Today (28 Oct)' },
+              { id: 'week', label: 'This Week' },
+              ...availableMonths.map(m => ({ id: m.key, label: m.label })),
+            ].map(period => (
+              <TouchableOpacity
+                key={period.id}
+                style={[
+                  styles.periodPill,
+                  periodFilter === period.id && styles.periodPillActive,
+                ]}
+                onPress={() => setPeriodFilter(period.id)}
+              >
+                <Text
+                  style={[
+                    styles.periodPillText,
+                    periodFilter === period.id && styles.periodPillTextActive,
+                  ]}
+                >
+                  {period.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Applied Filter Chips Preview */}
+          <View style={styles.appliedChipsRow}>
+            <View style={styles.chipPill}>
+              <Ionicons name="calendar-outline" size={12} color={COLORS.primary} />
+              <Text style={styles.chipText}>{getPeriodLabel(periodFilter)}</Text>
+            </View>
+
+            <View style={styles.chipPill}>
+              <Ionicons name="folder-outline" size={12} color={COLORS.primary} />
+              <Text style={styles.chipText}>{getSelectedCatName()}</Text>
+            </View>
+
+            <View style={styles.chipPill}>
+              <Ionicons name="swap-vertical-outline" size={12} color={COLORS.primary} />
+              <Text style={styles.chipText}>
+                {typeFilter === 'all' ? 'All Types' : typeFilter === 'expense' ? 'Expenses' : 'Income'}
+              </Text>
+            </View>
+
+            <Text style={styles.matchingRecordsText}>
+              ({filteredTransactions.length} records)
+            </Text>
+          </View>
+        </View>
 
         {/* 3 Main Required Cards: Total Income, Total Expenses, Current Balance */}
         <View style={styles.cardsGrid}>
@@ -172,7 +382,7 @@ export const AnalysisScreen = ({ navigation }) => {
         <View style={[styles.sectionCard, SHADOWS.sm]}>
           <Text style={styles.cardHeaderTitle}>Inflow vs Outflow Distribution</Text>
           <Text style={styles.cardHeaderSubtitle}>
-            Ratio of money earned against money spent
+            Ratio of money earned against money spent for selected filter
           </Text>
 
           <View style={styles.ratioBarContainer}>
@@ -197,13 +407,13 @@ export const AnalysisScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Category Expense Analysis */}
+        {/* Filtered Category Expense Breakdown */}
         <View style={[styles.sectionCard, SHADOWS.sm]}>
           <View style={styles.sectionTitleRow}>
             <View>
               <Text style={styles.cardHeaderTitle}>Category Expense Breakdown</Text>
               <Text style={styles.cardHeaderSubtitle}>
-                Spending distribution across categories
+                Filtered spending by category
               </Text>
             </View>
             <TouchableOpacity onPress={() => navigation.navigate('CategoriesTab')}>
@@ -212,7 +422,12 @@ export const AnalysisScreen = ({ navigation }) => {
           </View>
 
           {activeCategoryBreakdown.length === 0 ? (
-            <Text style={styles.noDataText}>No expenses recorded for this selection.</Text>
+            <View style={styles.emptyFilterBox}>
+              <Ionicons name="search-outline" size={28} color={COLORS.textMuted} />
+              <Text style={styles.noDataText}>
+                No expenses found matching the current filter criteria.
+              </Text>
+            </View>
           ) : (
             activeCategoryBreakdown.map(item => (
               <View key={item.id} style={styles.categoryRow}>
@@ -259,6 +474,37 @@ export const AnalysisScreen = ({ navigation }) => {
           )}
         </View>
 
+        {/* Matching Filtered Transactions Preview List */}
+        <View style={[styles.sectionCard, SHADOWS.sm]}>
+          <View style={styles.sectionTitleRow}>
+            <View>
+              <Text style={styles.cardHeaderTitle}>Filtered Records Preview</Text>
+              <Text style={styles.cardHeaderSubtitle}>
+                Transactions matching current filter ({filteredTransactions.length})
+              </Text>
+            </View>
+          </View>
+
+          {filteredTransactions.length === 0 ? (
+            <Text style={styles.noDataText}>No transactions match this filter.</Text>
+          ) : (
+            filteredTransactions.slice(0, 5).map(t => {
+              const isInc = t.type === 'income';
+              return (
+                <View key={t.id} style={styles.txRow}>
+                  <View style={styles.txLeft}>
+                    <Text style={styles.txTitle} numberOfLines={1}>{t.title}</Text>
+                    <Text style={styles.txDate}>{t.date} • {t.category}</Text>
+                  </View>
+                  <Text style={[styles.txAmount, isInc ? styles.txIncome : styles.txExpense]}>
+                    {isInc ? '+' : '-'} {currency}{Number(t.amount).toLocaleString()}
+                  </Text>
+                </View>
+              );
+            })
+          )}
+        </View>
+
         {/* Monthly Trend Comparison */}
         <View style={[styles.sectionCard, SHADOWS.sm]}>
           <Text style={styles.cardHeaderTitle}>Monthly Spending Comparison</Text>
@@ -267,7 +513,7 @@ export const AnalysisScreen = ({ navigation }) => {
           </Text>
 
           {availableMonths.map(month => {
-            const mTx = getTransactionsForMonth(month.key);
+            const mTx = transactions.filter(t => t.date.startsWith(month.key));
             let mExp = 0;
             let mInc = 0;
             mTx.forEach(t => {
@@ -304,6 +550,188 @@ export const AnalysisScreen = ({ navigation }) => {
           })}
         </View>
       </ScrollView>
+
+      {/* COMPREHENSIVE FILTER MODAL */}
+      <Modal
+        visible={isFilterModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsFilterModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Modal Header */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleRow}>
+                <Ionicons name="options" size={20} color={COLORS.primary} />
+                <Text style={styles.modalTitle}>Filter Analysis</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsFilterModalVisible(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={22} color={COLORS.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* 1. Time Range Section */}
+              <Text style={styles.modalSectionLabel}>1. Select Time Range</Text>
+              <View style={styles.modalPillGrid}>
+                {[
+                  { id: 'all', label: 'All Time' },
+                  { id: 'today', label: 'Today (28 Oct)' },
+                  { id: 'week', label: 'This Week' },
+                  ...availableMonths.map(m => ({ id: m.key, label: m.label })),
+                ].map(p => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[
+                      styles.modalOptionPill,
+                      periodFilter === p.id && styles.modalOptionPillActive,
+                    ]}
+                    onPress={() => setPeriodFilter(p.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        periodFilter === p.id && styles.modalOptionTextActive,
+                      ]}
+                    >
+                      {p.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* 2. Flow Type Section */}
+              <Text style={styles.modalSectionLabel}>2. Transaction Flow</Text>
+              <View style={styles.modalPillGrid}>
+                {[
+                  { id: 'all', label: 'All Transactions' },
+                  { id: 'expense', label: 'Expenses Only (-)' },
+                  { id: 'income', label: 'Income Only (+)' },
+                ].map(item => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.modalOptionPill,
+                      typeFilter === item.id && styles.modalOptionPillActive,
+                    ]}
+                    onPress={() => setTypeFilter(item.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        typeFilter === item.id && styles.modalOptionTextActive,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* 3. Category Filter Section */}
+              <Text style={styles.modalSectionLabel}>3. Filter by Category</Text>
+              <View style={styles.modalPillGrid}>
+                <TouchableOpacity
+                  style={[
+                    styles.modalOptionPill,
+                    selectedCategory === 'all' && styles.modalOptionPillActive,
+                  ]}
+                  onPress={() => setSelectedCategory('all')}
+                >
+                  <Text
+                    style={[
+                      styles.modalOptionText,
+                      selectedCategory === 'all' && styles.modalOptionTextActive,
+                    ]}
+                  >
+                    All Categories
+                  </Text>
+                </TouchableOpacity>
+
+                {DEFAULT_CATEGORIES.map(cat => (
+                  <TouchableOpacity
+                    key={cat.id}
+                    style={[
+                      styles.modalOptionPill,
+                      selectedCategory === cat.id && {
+                        backgroundColor: cat.bgColor || COLORS.surface,
+                        borderColor: cat.color,
+                      },
+                    ]}
+                    onPress={() => setSelectedCategory(cat.id)}
+                  >
+                    <Ionicons
+                      name={cat.icon}
+                      size={14}
+                      color={selectedCategory === cat.id ? cat.color : COLORS.textMuted}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        selectedCategory === cat.id && {
+                          color: cat.color,
+                          fontWeight: '700',
+                        },
+                      ]}
+                    >
+                      {cat.shortName || cat.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* 4. Sort By Section */}
+              <Text style={styles.modalSectionLabel}>4. Sort Records</Text>
+              <View style={styles.modalPillGrid}>
+                {[
+                  { id: 'amount_desc', label: 'Highest Amount First' },
+                  { id: 'date_desc', label: 'Newest Date First' },
+                  { id: 'amount_asc', label: 'Lowest Amount First' },
+                ].map(s => (
+                  <TouchableOpacity
+                    key={s.id}
+                    style={[
+                      styles.modalOptionPill,
+                      sortBy === s.id && styles.modalOptionPillActive,
+                    ]}
+                    onPress={() => setSortBy(s.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.modalOptionText,
+                        sortBy === s.id && styles.modalOptionTextActive,
+                      ]}
+                    >
+                      {s.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalResetBtn} onPress={resetFilters}>
+                <Text style={styles.modalResetBtnText}>Reset All</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalApplyBtn}
+                onPress={() => setIsFilterModalVisible(false)}
+              >
+                <Text style={styles.modalApplyBtnText}>
+                  Apply Filters ({filteredTransactions.length} records)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -322,31 +750,157 @@ const styles = StyleSheet.create({
     padding: SPACING.base,
     paddingBottom: 40,
   },
-  filterScroll: {
-    marginBottom: SPACING.base,
-  },
-  filterContainer: {
-    gap: SPACING.sm,
-  },
-  filterPill: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: 7,
-    borderRadius: RADIUS.full,
+  filterBarCard: {
     backgroundColor: COLORS.card,
+    borderRadius: RADIUS.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.base,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: COLORS.borderLight,
   },
-  filterPillActive: {
+  filterBarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.sm,
+  },
+  filterTitleArea: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  filterBarTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  filterBadge: {
+    backgroundColor: COLORS.primaryMuted,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: RADIUS.full,
+  },
+  filterBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  filterButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  resetButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  resetButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.danger,
+  },
+  filterTriggerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    gap: 4,
   },
-  filterPillText: {
+  filterTriggerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  typeSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    padding: 3,
+    marginBottom: SPACING.sm,
+  },
+  typeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 7,
+    borderRadius: RADIUS.sm,
+    gap: 4,
+  },
+  typeOptionActive: {
+    backgroundColor: COLORS.primary,
+  },
+  typeOptionActiveExpense: {
+    backgroundColor: COLORS.danger,
+  },
+  typeOptionActiveIncome: {
+    backgroundColor: COLORS.success,
+  },
+  typeOptionText: {
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.textSecondary,
   },
-  filterPillTextActive: {
+  typeOptionTextActive: {
     color: COLORS.white,
+    fontWeight: '700',
+  },
+  periodScroll: {
+    marginBottom: SPACING.sm,
+  },
+  periodContainer: {
+    gap: 6,
+  },
+  periodPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  periodPillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  periodPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  periodPillTextActive: {
+    color: COLORS.white,
+    fontWeight: '700',
+  },
+  appliedChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+  },
+  chipPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.full,
+    gap: 4,
+  },
+  chipText: {
+    fontSize: 11,
+    color: COLORS.textPrimary,
+    fontWeight: '500',
+  },
+  matchingRecordsText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontStyle: 'italic',
   },
   cardsGrid: {
     flexDirection: 'row',
@@ -550,12 +1104,49 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 3,
   },
+  emptyFilterBox: {
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    gap: 6,
+  },
   noDataText: {
     fontSize: 12,
     color: COLORS.textMuted,
     fontStyle: 'italic',
     textAlign: 'center',
     marginVertical: SPACING.sm,
+  },
+  txRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  txLeft: {
+    flex: 1,
+    marginRight: SPACING.sm,
+  },
+  txTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+  },
+  txDate: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  txAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  txIncome: {
+    color: COLORS.success,
+  },
+  txExpense: {
+    color: COLORS.danger,
   },
   monthCompItem: {
     backgroundColor: COLORS.surface,
@@ -594,5 +1185,111 @@ const styles = StyleSheet.create({
   barValue: {
     fontSize: 12,
     fontWeight: '700',
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: COLORS.card,
+    borderTopLeftRadius: RADIUS.xl,
+    borderTopRightRadius: RADIUS.xl,
+    maxHeight: '85%',
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: SPACING.base,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+  },
+  modalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: SPACING.base,
+  },
+  modalSectionLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+    marginBottom: 8,
+    marginTop: 6,
+  },
+  modalPillGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: SPACING.md,
+  },
+  modalOptionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  modalOptionPillActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  modalOptionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  modalOptionTextActive: {
+    color: COLORS.white,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.base,
+    paddingTop: SPACING.sm,
+    gap: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+  },
+  modalResetBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: SPACING.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalResetBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  modalApplyBtn: {
+    flex: 1,
+    backgroundColor: COLORS.primary,
+    borderRadius: RADIUS.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalApplyBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.white,
   },
 });
