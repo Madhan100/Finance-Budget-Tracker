@@ -35,7 +35,7 @@ export const CustomDrawerContent = ({ navigation, state }) => {
 
   const navigateTo = (screenName) => {
     navigation.closeDrawer();
-    navigation.navigate(screenName);
+    navigation.navigate('MainTabs', { screen: screenName });
   };
 
   return (
